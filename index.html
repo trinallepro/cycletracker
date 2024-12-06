@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon application de vélo</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Ajouter Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+<header>
+    <nav>
+        <ul>
+            <li><a href="index.html">Accueil</a></li>
+            <li><a href="history.html">Historique</a></li>
+        </ul>
+    </nav>
+</header>
+
+<div class="container">
+    <div class="ride-info">
+        <h2>Enregistrer une sortie</h2>
+        <button id="startStopButton">Démarrer la sortie</button>
+        <p id="distance">Distance: 0 km</p>
+        <p id="speed">Vitesse Moyenne: 0 km/h</p>
+        <p id="time">Temps: 00:00</p>
+    </div>
+
+    <div id="map" style="height: 400px;"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

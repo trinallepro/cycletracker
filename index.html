@@ -2,35 +2,209 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon application de vélo</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- Ajouter Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>CycleTracker - Enregistrer une Sortie</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+
+
 </head>
 <body>
-<header>
     <nav>
-        <ul>
-            <li><a href="index.html">Accueil</a></li>
-            <li><a href="history.html">Historique</a></li>
-        </ul>
+        <a href="index.html">Accueil</a>
+        <a href="history.html">Historique</a>
     </nav>
-</header>
 
-<div class="container">
-    <div class="ride-info">
-        <h2>Enregistrer une sortie</h2>
-        <button id="startStopButton">Démarrer la sortie</button>
-        <p id="distance">Distance: 0 km</p>
-        <p id="speed">Vitesse Moyenne: 0 km/h</p>
-        <p id="time">Temps: 00:00</p>
+    <div class="container">
+        <div class="ride-info">
+            <h2>Enregistrer une sortie</h2>
+            <button id="startStopBtn">Démarrer la sortie</button>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <small>Distance</small>
+                    <p id="distanceDisplay">0 km</p>
+                </div>
+                <div class="stat-item">
+                    <small>Vitesse Moyenne</small>
+                    <p id="avgSpeedDisplay">0 km/h</p>
+                </div>
+                <div class="stat-item">
+                    <small>Temps</small>
+                    <p id="timeDisplay">00:00</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
     </div>
 
-    <div id="map" style="height: 400px;"></div>
-</div>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        class RideTracker {
+            constructor() {
+                this.isTracking = false;
+                this.startTime = null;
+                this.endTime = null;
+                this.totalDistance = 0;
+                this.positions = [];
+                this.map = null;
+                this.polyline = null;
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="js/main.js"></script>
+                this.initMap();
+                this.setupEventListeners();
+            }
+
+            initMap() {
+                this.map = L.map('map').setView([0, 0], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(this.map);
+            }
+
+            setupEventListeners() {
+                document.getElementById('startStopBtn').addEventListener('click', () => this.toggleTracking());
+                
+                if ("geolocation" in navigator) {
+                    this.watchId = null;
+                } else {
+                    alert("Géolocalisation non supportée");
+                }
+            }
+
+            toggleTracking() {
+                const btn = document.getElementById('startStopBtn');
+                
+                if (!this.isTracking) {
+                    this.startTracking();
+                    btn.textContent = 'Arrêter la sortie';
+                    btn.classList.add('active');
+                } else {
+                    this.stopTracking();
+                    btn.textContent = 'Démarrer la sortie';
+                    btn.classList.remove('active');
+                }
+            }
+
+            startTracking() {
+                this.isTracking = true;
+                this.startTime = new Date();
+                this.positions = [];
+                this.totalDistance = 0;
+
+                // Clear previous polyline if exists
+                if (this.polyline) {
+                    this.map.removeLayer(this.polyline);
+                }
+
+                this.watchId = navigator.geolocation.watchPosition(
+                    (position) => this.updatePosition(position),
+                    (error) => console.error("Erreur de géolocalisation", error),
+                    { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+                );
+
+                this.updateTimer();
+            }
+
+            updatePosition(position) {
+                const newPos = [position.coords.latitude, position.coords.longitude];
+                this.positions.push(newPos);
+
+                // Update map
+                this.map.setView(newPos, 13);
+
+                // Draw polyline
+                if (this.polyline) {
+                    this.map.removeLayer(this.polyline);
+                }
+                this.polyline = L.polyline(this.positions, {color: 'blue'}).addTo(this.map);
+
+                // Calculate distance
+                if (this.positions.length > 1) {
+                    const lastPos = this.positions[this.positions.length - 2];
+                    const distance = this.calculateDistance(
+                        lastPos[0], lastPos[1], 
+                        newPos[0], newPos[1]
+                    );
+                    this.totalDistance += distance;
+                }
+
+                this.updateDisplay();
+            }
+
+            calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371; // Rayon de la Terre en km
+                const dLat = this.deg2rad(lat2 - lat1);
+                const dLon = this.deg2rad(lon2 - lon1);
+                const a = 
+                    Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) * 
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+                return R * c;
+            }
+
+            deg2rad(deg) {
+                return deg * (Math.PI/180)
+            }
+
+            stopTracking() {
+                this.isTracking = false;
+                this.endTime = new Date();
+                
+                if (this.watchId !== null) {
+                    navigator.geolocation.clearWatch(this.watchId);
+                }
+
+                this.saveRide();
+                this.resetDisplay();
+            }
+
+            updateTimer() {
+                if (!this.isTracking) return;
+
+                const currentTime = new Date();
+                const elapsedTime = new Date(currentTime - this.startTime);
+                const minutes = elapsedTime.getUTCMinutes().toString().padStart(2, '0');
+                const seconds = elapsedTime.getUTCSeconds().toString().padStart(2, '0');
+                
+                document.getElementById('timeDisplay').textContent = `${minutes}:${seconds}`;
+                
+                // Calculate average speed
+                const hours = elapsedTime / (1000 * 60 * 60);
+                const avgSpeed = hours > 0 ? (this.totalDistance / hours).toFixed(1) : 0;
+                document.getElementById('avgSpeedDisplay').textContent = `${avgSpeed} km/h`;
+
+                setTimeout(() => this.updateTimer(), 1000);
+            }
+
+            updateDisplay() {
+                document.getElementById('distanceDisplay').textContent = `${this.totalDistance.toFixed(2)} km`;
+            }
+
+            resetDisplay() {
+                document.getElementById('distanceDisplay').textContent = '0 km';
+                document.getElementById('avgSpeedDisplay').textContent = '0 km/h';
+                document.getElementById('timeDisplay').textContent = '00:00';
+            }
+
+            saveRide() {
+                const ride = {
+                    date: this.startTime.toISOString(),
+                    distance: this.totalDistance,
+                    duration: (this.endTime - this.startTime) / 1000, // duration in seconds
+                    avgSpeed: this.totalDistance / ((this.endTime - this.startTime) / (1000 * 60 * 60)),
+                    positions: this.positions
+                };
+
+                // Retrieve existing rides
+                let rides = JSON.parse(localStorage.getItem('cycleTrackerRides') || '[]');
+                rides.push(ride);
+                localStorage.setItem('cycleTrackerRides', JSON.stringify(rides));
+            }
+        }
+
+        // Initialize the ride tracker when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new RideTracker();
+        });
+    </script>
 </body>
 </html>
